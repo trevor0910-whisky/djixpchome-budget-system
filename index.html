@@ -6,6 +6,7 @@
     <title>PChome DJI 獎勵金收支管理</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.0.0"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 </head>
@@ -13,8 +14,8 @@
 
     <nav class="bg-blue-800 p-4 shadow-md">
         <div class="container mx-auto flex items-center justify-between">
-            <div class="text-white font-bold text-xl tracking-wider"><i class="fas fa-camera mr-2"></i>PChome DJI 獎勵金收支管理系統 <span class="text-xs bg-emerald-500 text-white px-2 py-1 rounded ml-2"><i class="fas fa-shield-alt mr-1"></i>安全版</span></div>
-            <div class="text-white text-sm bg-blue-700 py-1 px-3 rounded-full">PM: 泓毅 (Trevor)</div>
+            <div class="text-white font-bold text-xl tracking-wider"><i class="fas fa-camera mr-2"></i>PChome DJI 獎勵金收支管理系統 <span class="text-xs bg-emerald-500 text-white px-2 py-1 rounded ml-2"><i class="fas fa-shield-alt mr-1"></i>安全版 V4.1</span></div>
+            <div class="text-white text-sm bg-blue-700 py-1 px-3 rounded-full">PM 專用</div>
         </div>
     </nav>
 
@@ -75,10 +76,14 @@
                 <h3 class="text-lg font-bold text-gray-800 mb-4 border-b pb-2"><i class="fas fa-chart-bar mr-2 text-blue-500"></i>月度收支總額趨勢</h3>
                 <canvas id="monthlyChart" height="250"></canvas>
             </div>
-            <div class="bg-white rounded-xl p-6 shadow-sm">
+            <div class="bg-white rounded-xl p-6 shadow-sm flex flex-col">
                 <h3 class="text-lg font-bold text-gray-800 mb-4 border-b pb-2"><i class="fas fa-chart-pie mr-2 text-red-500"></i>總行銷費用類別佔比</h3>
-                <div class="w-full max-w-xs mx-auto">
+                <div class="w-full mx-auto mb-6" style="max-height: 220px; display: flex; justify-content: center;">
                     <canvas id="categoryChart"></canvas>
+                </div>
+                <h3 class="text-lg font-bold text-gray-800 mb-4 border-b pb-2 mt-auto"><i class="fas fa-users-cog mr-2 text-indigo-500"></i>經辦人費用與類別比例</h3>
+                <div class="w-full" style="min-height: 200px;">
+                    <canvas id="picExpenseChart"></canvas>
                 </div>
             </div>
         </div>
@@ -93,7 +98,7 @@
                     </div>
                     <div class="mb-3">
                         <label class="block text-gray-700 text-sm font-bold mb-1">經辦人</label>
-                        <input type="text" id="picInput" value="泓毅" class="border border-gray-300 rounded w-full py-2 px-3 text-gray-700 focus:ring outline-none" required>
+                        <input type="text" id="picInput" placeholder="請填寫經辦人" class="border border-gray-300 rounded w-full py-2 px-3 text-gray-700 focus:ring outline-none" required>
                     </div>
                     <div class="mb-3">
                         <label class="block text-gray-700 text-sm font-bold mb-1">收支名目</label>
@@ -209,11 +214,15 @@
     </div>
 
 <script>
-// 清空預設資料 (安全版)
+// 註冊 ChartDataLabels
+Chart.register(ChartDataLabels);
+
+// 空白安全版資料
 let records = JSON.parse(localStorage.getItem('djiLedgerData')) || [];
 let chartInstanceMonthly = null;
 let chartInstanceCategory = null;
 let chartInstancePeriodic = null;
+let chartInstancePic = null;
 
 // 圖表顏色
 const colorMap = {
@@ -234,7 +243,7 @@ document.getElementById('editCategory').addEventListener('change', function() {
     document.getElementById('editType').value = (this.value === '獎勵金') ? 'income' : 'expense';
 });
 
-// 新增紀錄
+// 新增紀錄 (經辦人預設留白)
 function addRecord(e) {
     e.preventDefault();
     const newRecord = {
@@ -249,12 +258,12 @@ function addRecord(e) {
     records.push(newRecord);
     saveData();
     document.getElementById('recordForm').reset();
-    document.getElementById('picInput').value = "泓毅"; 
+    document.getElementById('picInput').value = ""; // 保持空白
     updateFilterOptions();
     renderApp();
 }
 
-// 編輯與刪除功能
+// 編輯與刪除
 function openEditModal(id) {
     const record = records.find(r => r.id === id);
     if (!record) return;
@@ -295,37 +304,23 @@ function deleteRecord(id) {
 // 存入 LocalStorage
 function saveData() { localStorage.setItem('djiLedgerData', JSON.stringify(records)); }
 
-// ==========================================
-// 匯出 Excel 功能 (結合 SheetJS)
-// ==========================================
+// 匯出 Excel
 function exportData() {
     if (records.length === 0) {
         alert("目前沒有資料可以匯出喔！");
         return;
     }
-    // 將資料轉成適合 Excel 閱讀的中文標題格式
     const exportArr = records.map(r => ({
-        'ID(勿動)': r.id,
-        '日期': r.date,
-        '經辦人': r.pic,
-        '名目': r.desc,
-        '類別': r.category,
-        '收支類型': r.type === 'income' ? '收入' : '支出',
-        '金額(NT$)': r.amount
+        'ID(勿動)': r.id, '日期': r.date, '經辦人': r.pic, '名目': r.desc,
+        '類別': r.category, '收支類型': r.type === 'income' ? '收入' : '支出', '金額(NT$)': r.amount
     }));
-
-    // 建立工作表與工作簿
     const worksheet = XLSX.utils.json_to_sheet(exportArr);
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, "收支明細");
-
-    // 觸發下載
     XLSX.writeFile(workbook, `DJI_獎勵金收支紀錄_${new Date().toISOString().slice(0,10)}.xlsx`);
 }
 
-// ==========================================
-// 匯入資料 (支援 Excel & 舊版 JSON)
-// ==========================================
+// 匯入資料
 function importData(event) {
     const file = event.target.files[0];
     if (!file) return;
@@ -333,7 +328,6 @@ function importData(event) {
     const reader = new FileReader();
     const fileExt = file.name.split('.').pop().toLowerCase();
 
-    // 處理舊版 JSON
     if (fileExt === 'json') {
         reader.onload = function(e) {
             try {
@@ -344,7 +338,6 @@ function importData(event) {
         };
         reader.readAsText(file);
     } 
-    // 處理 Excel (.xlsx) 或 CSV
     else if (fileExt === 'xlsx' || fileExt === 'xls' || fileExt === 'csv') {
         reader.onload = function(e) {
             try {
@@ -354,7 +347,6 @@ function importData(event) {
                 const worksheet = workbook.Sheets[firstSheetName];
                 const json = XLSX.utils.sheet_to_json(worksheet);
                 
-                // 把 Excel 中文標題轉回系統可讀的屬性
                 const importedRecords = json.map(r => ({
                     id: r['ID(勿動)'] || Date.now() + Math.floor(Math.random() * 1000), 
                     date: r['日期'] || '',
@@ -367,14 +359,13 @@ function importData(event) {
                 
                 records = importedRecords;
                 saveData(); updateFilterOptions(); renderApp();
-                alert('Excel 資料匯入成功！系統已更新。');
-            } catch (err) { alert('Excel 解析失敗，請確認是否為系統匯出的標準格式。'); }
+                alert('Excel/CSV 資料匯入成功！系統已更新。');
+            } catch (err) { alert('解析失敗，請確認是否為系統匯出的標準格式。'); }
         };
         reader.readAsArrayBuffer(file);
     } else {
         alert('不支援的檔案格式！請上傳 .xlsx, .csv 或 .json');
     }
-    // 重設 input 讓同檔名可以重複上傳
     event.target.value = '';
 }
 
@@ -384,7 +375,6 @@ function clearData(){
     }
 }
 
-// 畫面渲染邏輯
 function getQuarter(dateString) {
     const date = new Date(dateString);
     const year = date.getFullYear();
@@ -411,7 +401,6 @@ function updateFilterOptions() {
 }
 
 function renderApp() {
-    // 處理空狀態 UI
     const tbody = document.getElementById('recordTableBody');
     const emptyState = document.getElementById('emptyState');
     if (records.length === 0) {
@@ -438,6 +427,7 @@ function renderApp() {
     const monthlyData = {};
     const periodicExpenseData = {}; 
     const expenseCategoriesSet = new Set();
+    const picExpenseData = {}; // 經辦人費用統計
 
     filteredRecords.forEach(r => {
         if(!r.date) return;
@@ -456,6 +446,10 @@ function renderApp() {
             categoryTotals[r.category] = (categoryTotals[r.category] || 0) + r.amount;
             periodicExpenseData[periodKey][r.category] = (periodicExpenseData[periodKey][r.category] || 0) + r.amount;
             expenseCategoriesSet.add(r.category);
+
+            // 統計經辦人
+            if (!picExpenseData[r.pic]) picExpenseData[r.pic] = {};
+            picExpenseData[r.pic][r.category] = (picExpenseData[r.pic][r.category] || 0) + r.amount;
         }
     });
 
@@ -489,79 +483,86 @@ function renderApp() {
         });
     }
 
-    // 更新圖表
+    // --- 圖表 1: 月度長條圖 ---
     const sortedMonths = Object.keys(monthlyData).sort();
-    const inData = sortedMonths.map(m => monthlyData[m].income);
-    const exData = sortedMonths.map(m => monthlyData[m].expense);
-    
     if (chartInstanceMonthly) chartInstanceMonthly.destroy();
-    const ctxMonthly = document.getElementById('monthlyChart').getContext('2d');
-    chartInstanceMonthly = new Chart(ctxMonthly, {
+    chartInstanceMonthly = new Chart(document.getElementById('monthlyChart').getContext('2d'), {
         type: 'bar',
         data: {
             labels: sortedMonths,
             datasets: [
-                { label: '收入', data: inData, backgroundColor: '#3b82f6', borderRadius: 4 },
-                { label: '支出', data: exData, backgroundColor: '#ef4444', borderRadius: 4 }
+                { label: '收入', data: sortedMonths.map(m => monthlyData[m].income), backgroundColor: '#3b82f6', borderRadius: 4 },
+                { label: '支出', data: sortedMonths.map(m => monthlyData[m].expense), backgroundColor: '#ef4444', borderRadius: 4 }
             ]
         },
-        options: { responsive: true, scales: { y: { beginAtZero: true } } }
+        options: { responsive: true, plugins: { datalabels: { display: false } } }
     });
 
+    // --- 圖表 2: 類別圓餅圖 (縮小佔比、顯示百分比與數字) ---
     const catLabels = Object.keys(categoryTotals);
-    const catBgColors = catLabels.map(cat => colorMap[cat] || '#cbd5e1'); 
-    
     if (chartInstanceCategory) chartInstanceCategory.destroy();
-    const ctxCat = document.getElementById('categoryChart').getContext('2d');
-    chartInstanceCategory = new Chart(ctxCat, {
+    chartInstanceCategory = new Chart(document.getElementById('categoryChart').getContext('2d'), {
         type: 'doughnut',
         data: {
             labels: catLabels,
-            datasets: [{
-                data: Object.values(categoryTotals),
-                backgroundColor: catBgColors,
-                hoverOffset: 4
-            }]
+            datasets: [{ data: Object.values(categoryTotals), backgroundColor: catLabels.map(cat => colorMap[cat] || '#cbd5e1') }]
         },
-        options: { responsive: true, plugins: { legend: { position: 'bottom' } } }
-    });
-
-    const sortedPeriods = Object.keys(periodicExpenseData).sort(); 
-    const expenseCategoriesArr = Array.from(expenseCategoriesSet); 
-    
-    const periodicDatasets = expenseCategoriesArr.map(cat => {
-        return {
-            label: cat,
-            data: sortedPeriods.map(period => periodicExpenseData[period][cat] || 0),
-            backgroundColor: colorMap[cat] || '#cbd5e1'
-        };
-    });
-
-    if (chartInstancePeriodic) chartInstancePeriodic.destroy();
-    const ctxPeriodic = document.getElementById('periodicCategoryChart').getContext('2d');
-    chartInstancePeriodic = new Chart(ctxPeriodic, {
-        type: 'bar',
-        data: {
-            labels: sortedPeriods,
-            datasets: periodicDatasets
-        },
-        options: {
-            responsive: true,
-            scales: { x: { stacked: true }, y: { stacked: true, beginAtZero: true } },
-            plugins: {
-                tooltip: {
-                    callbacks: {
-                        label: function(context) {
-                            let label = context.dataset.label || '';
-                            if (label) { label += ': '; }
-                            if (context.parsed.y !== null) {
-                                label += new Intl.NumberFormat('zh-TW', { style: 'currency', currency: 'TWD', minimumFractionDigits: 0 }).format(context.parsed.y);
-                            }
-                            return label;
-                        }
+        options: { 
+            responsive: true, maintainAspectRatio: false,
+            plugins: { 
+                legend: { position: 'right' },
+                datalabels: {
+                    color: '#fff',
+                    font: { weight: 'bold', size: 11 },
+                    formatter: (value, ctx) => {
+                        let sum = 0;
+                        let dataArr = ctx.chart.data.datasets[0].data;
+                        dataArr.map(data => { sum += data; });
+                        let percentage = (value * 100 / sum).toFixed(0) + "%";
+                        let amount = (value >= 10000) ? (value/10000).toFixed(1) + 'W' : (value/1000).toFixed(1) + 'K';
+                        return percentage + '\n' + amount;
                     }
                 }
-            }
+            } 
+        }
+    });
+
+    // --- 圖表 3: 經辦人分析圖 (新功能) ---
+    const picNames = Object.keys(picExpenseData).filter(p => p !== '系統'); // 排除系統
+    const expenseCategoriesArr = Array.from(expenseCategoriesSet); 
+    const picDatasets = expenseCategoriesArr.map(cat => ({
+        label: cat,
+        data: picNames.map(pic => picExpenseData[pic][cat] || 0),
+        backgroundColor: colorMap[cat] || '#cbd5e1'
+    }));
+
+    if (chartInstancePic) chartInstancePic.destroy();
+    chartInstancePic = new Chart(document.getElementById('picExpenseChart').getContext('2d'), {
+        type: 'bar',
+        data: { labels: picNames, datasets: picDatasets },
+        options: {
+            responsive: true, maintainAspectRatio: false,
+            indexAxis: 'y', // 橫向顯示
+            scales: { x: { stacked: true }, y: { stacked: true } },
+            plugins: { datalabels: { display: false } }
+        }
+    });
+
+    // --- 圖表 4: 週期分析圖 ---
+    const sortedPeriods = Object.keys(periodicExpenseData).sort(); 
+    const periodicDatasets = expenseCategoriesArr.map(cat => ({
+        label: cat,
+        data: sortedPeriods.map(period => periodicExpenseData[period][cat] || 0),
+        backgroundColor: colorMap[cat] || '#cbd5e1'
+    }));
+
+    if (chartInstancePeriodic) chartInstancePeriodic.destroy();
+    chartInstancePeriodic = new Chart(document.getElementById('periodicCategoryChart').getContext('2d'), {
+        type: 'bar',
+        data: { labels: sortedPeriods, datasets: periodicDatasets },
+        options: {
+            responsive: true, scales: { x: { stacked: true }, y: { stacked: true, beginAtZero: true } },
+            plugins: { datalabels: { display: false } }
         }
     });
 }
