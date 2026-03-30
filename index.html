@@ -7,12 +7,13 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 </head>
 <body class="bg-slate-50 font-sans relative">
 
     <nav class="bg-blue-800 p-4 shadow-md">
         <div class="container mx-auto flex items-center justify-between">
-            <div class="text-white font-bold text-xl tracking-wider"><i class="fas fa-camera mr-2"></i>PChome DJI 獎勵金收支管理系統 <span class="text-xs bg-yellow-400 text-blue-900 px-2 py-1 rounded ml-2">V3</span></div>
+            <div class="text-white font-bold text-xl tracking-wider"><i class="fas fa-camera mr-2"></i>PChome DJI 獎勵金收支管理系統 <span class="text-xs bg-emerald-500 text-white px-2 py-1 rounded ml-2"><i class="fas fa-shield-alt mr-1"></i>安全版</span></div>
             <div class="text-white text-sm bg-blue-700 py-1 px-3 rounded-full">PM: 泓毅 (Trevor)</div>
         </div>
     </nav>
@@ -20,10 +21,10 @@
     <div class="container mx-auto my-6 px-4">
         
         <div class="flex justify-end mb-6 space-x-3">
-            <button onclick="exportData()" class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2 px-4 rounded shadow transition-colors"><i class="fas fa-file-export mr-2"></i>匯出備份 (交接用)</button>
-            <input type="file" id="importFile" class="hidden" accept=".json" onchange="importData(event)">
+            <button onclick="exportData()" class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2 px-4 rounded shadow transition-colors"><i class="fas fa-file-excel mr-2"></i>匯出 Excel</button>
+            <input type="file" id="importFile" class="hidden" accept=".xlsx, .xls, .csv, .json" onchange="importData(event)">
             <button onclick="document.getElementById('importFile').click()" class="bg-amber-500 hover:bg-amber-600 text-white font-bold py-2 px-4 rounded shadow transition-colors"><i class="fas fa-file-import mr-2"></i>匯入資料</button>
-            <button onclick="clearData()" class="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded shadow transition-colors"><i class="fas fa-trash-alt mr-2"></i>清除資料</button>
+            <button onclick="clearData()" class="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded shadow transition-colors"><i class="fas fa-trash-alt mr-2"></i>清除系統資料</button>
         </div>
 
         <div class="bg-white rounded-xl p-4 shadow-sm mb-6 flex flex-wrap gap-4 items-center border-l-4 border-indigo-500">
@@ -34,7 +35,6 @@
             <select id="picFilter" onchange="renderApp()" class="border border-gray-300 rounded py-2 px-3 text-gray-700 bg-gray-50 outline-none font-bold">
                 <option value="all">所有經辦人</option>
             </select>
-            <span class="text-xs text-gray-400 ml-auto">提示：篩選結果會連動下方所有的卡片與圖表</span>
         </div>
 
         <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
@@ -148,6 +148,10 @@
                         <tbody id="recordTableBody" class="text-gray-700 text-sm divide-y">
                             </tbody>
                     </table>
+                    <div id="emptyState" class="hidden p-8 text-center text-gray-400">
+                        <i class="fas fa-folder-open text-4xl mb-3"></i>
+                        <p>目前沒有資料，請新增紀錄或匯入檔案。</p>
+                    </div>
                 </div>
             </div>
         </div>
@@ -205,55 +209,29 @@
     </div>
 
 <script>
-// 初始化歷史資料
-const defaultData = [
-  {"id": 1, "date": "2025-01-09", "pic": "系統", "desc": "202409-12_Q4_DJI銷獎", "category": "獎勵金", "type": "income", "amount": 2130930},
-  {"id": 2, "date": "2025-02-03", "pic": "泓毅", "desc": "FLIP新機-RS廣告", "category": "站外行銷", "type": "expense", "amount": 100000},
-  {"id": 3, "date": "2025-02-03", "pic": "泓毅", "desc": "DJI-1月包套", "category": "站內行銷", "type": "expense", "amount": 50000},
-  {"id": 4, "date": "2025-02-26", "pic": "泓毅", "desc": "2/8-2/28 送1000P幣", "category": "折價回饋", "type": "expense", "amount": 89000},
-  {"id": 5, "date": "2025-02-26", "pic": "泓毅", "desc": "2/8-2/28 送1000P幣", "category": "折價回饋", "type": "expense", "amount": 40000},
-  {"id": 6, "date": "2025-03-26", "pic": "恬瑜", "desc": "2/8-2/28 送1000P幣", "category": "折價回饋", "type": "expense", "amount": 91000},
-  {"id": 7, "date": "2025-03-26", "pic": "泓毅", "desc": "3/10-3/31 送1000P幣", "category": "折價回饋", "type": "expense", "amount": 50000},
-  {"id": 8, "date": "2025-04-08", "pic": "系統", "desc": "2025_Q1_DJI銷獎", "category": "獎勵金", "type": "income", "amount": 464897},
-  {"id": 9, "date": "2025-04-26", "pic": "泓毅", "desc": "滿1萬登記送1000P幣", "category": "折價回饋", "type": "expense", "amount": 80000},
-  {"id": 10, "date": "2025-05-26", "pic": "泓毅", "desc": "滿3000登記抽Omron體脂計", "category": "站內行銷", "type": "expense", "amount": 126000},
-  {"id": 11, "date": "2025-06-26", "pic": "恬瑜", "desc": "6/9-6/19 滿萬送618P幣", "category": "折價回饋", "type": "expense", "amount": 150792},
-  {"id": 12, "date": "2025-06-26", "pic": "泓毅", "desc": "618包套", "category": "站內行銷", "type": "expense", "amount": 250000},
-  {"id": 13, "date": "2025-07-11", "pic": "系統", "desc": "2025_Q2_DJI銷獎", "category": "獎勵金", "type": "income", "amount": 932434},
-  {"id": 14, "date": "2025-09-26", "pic": "泓毅", "desc": "99購物節包套-星座包", "category": "站內行銷", "type": "expense", "amount": 100000},
-  {"id": 15, "date": "2025-10-03", "pic": "系統", "desc": "2025_Q3_DJI銷獎", "category": "獎勵金", "type": "income", "amount": 349789},
-  {"id": 16, "date": "2025-11-26", "pic": "雁平", "desc": "雙11包套", "category": "站內行銷", "type": "expense", "amount": 200000},
-  {"id": 17, "date": "2026-01-23", "pic": "系統", "desc": "2025_Q4_DJI銷獎", "category": "獎勵金", "type": "income", "amount": 798893},
-  {"id": 18, "date": "2026-03-26", "pic": "泓毅", "desc": "03月Google PfM DJI", "category": "站外行銷", "type": "expense", "amount": 50000}
-];
-
-let records = JSON.parse(localStorage.getItem('djiLedgerData')) || defaultData;
+// 清空預設資料 (安全版)
+let records = JSON.parse(localStorage.getItem('djiLedgerData')) || [];
 let chartInstanceMonthly = null;
 let chartInstanceCategory = null;
 let chartInstancePeriodic = null;
 
-// 定義統一的圖表顏色
+// 圖表顏色
 const colorMap = {
-    '站外行銷': '#ef4444', // Red
-    '站內行銷': '#f59e0b', // Amber
-    '折價回饋': '#10b981', // Emerald
-    '獎勵金': '#3b82f6',   // Blue
-    '其他': '#8b5cf6'      // Purple
+    '站外行銷': '#ef4444', 
+    '站內行銷': '#f59e0b', 
+    '折價回饋': '#10b981', 
+    '獎勵金': '#3b82f6',   
+    '其他': '#8b5cf6'      
 };
 
 // 格式化金錢
 const formatCurrency = (num) => new Intl.NumberFormat('zh-TW', { style: 'currency', currency: 'TWD', minimumFractionDigits: 0 }).format(num);
 
-// 類別連動收支 (新增區)
 document.getElementById('categoryInput').addEventListener('change', function() {
-    const typeSelect = document.getElementById('typeInput');
-    typeSelect.value = (this.value === '獎勵金') ? 'income' : 'expense';
+    document.getElementById('typeInput').value = (this.value === '獎勵金') ? 'income' : 'expense';
 });
-
-// 類別連動收支 (編輯區)
 document.getElementById('editCategory').addEventListener('change', function() {
-    const typeSelect = document.getElementById('editType');
-    typeSelect.value = (this.value === '獎勵金') ? 'income' : 'expense';
+    document.getElementById('editType').value = (this.value === '獎勵金') ? 'income' : 'expense';
 });
 
 // 新增紀錄
@@ -276,11 +254,10 @@ function addRecord(e) {
     renderApp();
 }
 
-// 開啟編輯 Modal
+// 編輯與刪除功能
 function openEditModal(id) {
     const record = records.find(r => r.id === id);
     if (!record) return;
-    
     document.getElementById('editId').value = record.id;
     document.getElementById('editDate').value = record.date;
     document.getElementById('editPic').value = record.pic;
@@ -288,21 +265,13 @@ function openEditModal(id) {
     document.getElementById('editCategory').value = record.category;
     document.getElementById('editType').value = record.type;
     document.getElementById('editAmount').value = record.amount;
-    
     document.getElementById('editModal').classList.remove('hidden');
 }
-
-// 關閉編輯 Modal
-function closeEditModal() {
-    document.getElementById('editModal').classList.add('hidden');
-}
-
-// 儲存編輯結果
+function closeEditModal() { document.getElementById('editModal').classList.add('hidden'); }
 function saveEditRecord(e) {
     e.preventDefault();
     const id = parseInt(document.getElementById('editId').value, 10);
     const index = records.findIndex(r => r.id === id);
-    
     if (index !== -1) {
         records[index] = {
             id: id,
@@ -313,69 +282,109 @@ function saveEditRecord(e) {
             type: document.getElementById('editType').value,
             amount: parseInt(document.getElementById('editAmount').value, 10)
         };
-        saveData();
-        closeEditModal();
-        updateFilterOptions();
-        renderApp();
+        saveData(); closeEditModal(); updateFilterOptions(); renderApp();
     }
 }
-
-// 刪除紀錄
 function deleteRecord(id) {
     if(confirm('確定要刪除這筆紀錄嗎？')) {
         records = records.filter(r => r.id !== id);
-        saveData();
-        updateFilterOptions();
-        renderApp();
+        saveData(); updateFilterOptions(); renderApp();
     }
 }
 
 // 存入 LocalStorage
-function saveData() {
-    localStorage.setItem('djiLedgerData', JSON.stringify(records));
-}
+function saveData() { localStorage.setItem('djiLedgerData', JSON.stringify(records)); }
 
-// 匯出 JSON
+// ==========================================
+// 匯出 Excel 功能 (結合 SheetJS)
+// ==========================================
 function exportData() {
-    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(records));
-    const downloadAnchorNode = document.createElement('a');
-    downloadAnchorNode.setAttribute("href", dataStr);
-    downloadAnchorNode.setAttribute("download", "DJI_獎勵金收支紀錄_" + new Date().toISOString().slice(0,10) + ".json");
-    document.body.appendChild(downloadAnchorNode);
-    downloadAnchorNode.click();
-    downloadAnchorNode.remove();
+    if (records.length === 0) {
+        alert("目前沒有資料可以匯出喔！");
+        return;
+    }
+    // 將資料轉成適合 Excel 閱讀的中文標題格式
+    const exportArr = records.map(r => ({
+        'ID(勿動)': r.id,
+        '日期': r.date,
+        '經辦人': r.pic,
+        '名目': r.desc,
+        '類別': r.category,
+        '收支類型': r.type === 'income' ? '收入' : '支出',
+        '金額(NT$)': r.amount
+    }));
+
+    // 建立工作表與工作簿
+    const worksheet = XLSX.utils.json_to_sheet(exportArr);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "收支明細");
+
+    // 觸發下載
+    XLSX.writeFile(workbook, `DJI_獎勵金收支紀錄_${new Date().toISOString().slice(0,10)}.xlsx`);
 }
 
-// 匯入 JSON
+// ==========================================
+// 匯入資料 (支援 Excel & 舊版 JSON)
+// ==========================================
 function importData(event) {
     const file = event.target.files[0];
     if (!file) return;
+
     const reader = new FileReader();
-    reader.onload = function(e) {
-        try {
-            const imported = JSON.parse(e.target.result);
-            records = imported;
-            saveData();
-            updateFilterOptions();
-            renderApp();
-            alert('資料匯入成功！');
-        } catch (err) {
-            alert('檔案格式錯誤！');
-        }
-    };
-    reader.readAsText(file);
+    const fileExt = file.name.split('.').pop().toLowerCase();
+
+    // 處理舊版 JSON
+    if (fileExt === 'json') {
+        reader.onload = function(e) {
+            try {
+                records = JSON.parse(e.target.result);
+                saveData(); updateFilterOptions(); renderApp();
+                alert('JSON 資料匯入成功！系統已更新。');
+            } catch (err) { alert('檔案格式錯誤！'); }
+        };
+        reader.readAsText(file);
+    } 
+    // 處理 Excel (.xlsx) 或 CSV
+    else if (fileExt === 'xlsx' || fileExt === 'xls' || fileExt === 'csv') {
+        reader.onload = function(e) {
+            try {
+                const data = new Uint8Array(e.target.result);
+                const workbook = XLSX.read(data, {type: 'array'});
+                const firstSheetName = workbook.SheetNames[0];
+                const worksheet = workbook.Sheets[firstSheetName];
+                const json = XLSX.utils.sheet_to_json(worksheet);
+                
+                // 把 Excel 中文標題轉回系統可讀的屬性
+                const importedRecords = json.map(r => ({
+                    id: r['ID(勿動)'] || Date.now() + Math.floor(Math.random() * 1000), 
+                    date: r['日期'] || '',
+                    pic: r['經辦人'] || '未知',
+                    desc: r['名目'] || '',
+                    category: r['類別'] || '其他',
+                    type: r['收支類型'] === '收入' ? 'income' : 'expense',
+                    amount: parseInt(r['金額(NT$)'], 10) || parseInt(r['金額'], 10) || 0
+                }));
+                
+                records = importedRecords;
+                saveData(); updateFilterOptions(); renderApp();
+                alert('Excel 資料匯入成功！系統已更新。');
+            } catch (err) { alert('Excel 解析失敗，請確認是否為系統匯出的標準格式。'); }
+        };
+        reader.readAsArrayBuffer(file);
+    } else {
+        alert('不支援的檔案格式！請上傳 .xlsx, .csv 或 .json');
+    }
+    // 重設 input 讓同檔名可以重複上傳
+    event.target.value = '';
 }
 
 function clearData(){
     if(confirm('確定要清除所有資料嗎？(此動作無法復原)')){
-        records = [];
-        saveData();
-        updateFilterOptions();
-        renderApp();
+        records = []; saveData(); updateFilterOptions(); renderApp();
     }
 }
 
-// 轉換日期為季度
+// 畫面渲染邏輯
 function getQuarter(dateString) {
     const date = new Date(dateString);
     const year = date.getFullYear();
@@ -383,14 +392,13 @@ function getQuarter(dateString) {
     return `${year}-Q${q}`;
 }
 
-// 更新篩選器選單內容
 function updateFilterOptions() {
     const yearSet = new Set(records.map(r => r.date.substring(0,4)));
     const filterSelect = document.getElementById('yearFilter');
     const currentYearFilter = filterSelect.value;
     filterSelect.innerHTML = '<option value="all">全部年份</option>';
     Array.from(yearSet).sort().reverse().forEach(year => {
-        filterSelect.innerHTML += `<option value="${year}" ${currentYearFilter===year?'selected':''}>${year}年</option>`;
+        if(year) filterSelect.innerHTML += `<option value="${year}" ${currentYearFilter===year?'selected':''}>${year}年</option>`;
     });
 
     const picSet = new Set(records.map(r => r.pic));
@@ -398,12 +406,21 @@ function updateFilterOptions() {
     const currentPicFilter = picSelect.value;
     picSelect.innerHTML = '<option value="all">所有經辦人</option>';
     Array.from(picSet).sort().forEach(pic => {
-        picSelect.innerHTML += `<option value="${pic}" ${currentPicFilter===pic?'selected':''}>${pic}</option>`;
+        if(pic) picSelect.innerHTML += `<option value="${pic}" ${currentPicFilter===pic?'selected':''}>${pic}</option>`;
     });
 }
 
-// 更新系統介面
 function renderApp() {
+    // 處理空狀態 UI
+    const tbody = document.getElementById('recordTableBody');
+    const emptyState = document.getElementById('emptyState');
+    if (records.length === 0) {
+        tbody.innerHTML = '';
+        emptyState.classList.remove('hidden');
+    } else {
+        emptyState.classList.add('hidden');
+    }
+
     records.sort((a, b) => new Date(b.date) - new Date(a.date)); 
 
     const yearFilterVal = document.getElementById('yearFilter').value;
@@ -423,6 +440,7 @@ function renderApp() {
     const expenseCategoriesSet = new Set();
 
     filteredRecords.forEach(r => {
+        if(!r.date) return;
         const month = r.date.substring(0,7); 
         if (!monthlyData[month]) monthlyData[month] = { income: 0, expense: 0 };
         
@@ -450,30 +468,28 @@ function renderApp() {
     document.getElementById('usageRate').innerText = usagePercent + '%';
     document.getElementById('usageProgressBar').style.width = Math.min(usagePercent, 100) + '%';
 
-    // 渲染明細表格 (新增編輯按鈕)
-    const tbody = document.getElementById('recordTableBody');
-    tbody.innerHTML = '';
-    filteredRecords.forEach(r => {
-        const isInc = r.type === 'income';
-        tbody.innerHTML += `
-            <tr class="hover:bg-blue-50 transition-colors">
-                <td class="py-2 px-3">${r.date}</td>
-                <td class="py-2 px-3 font-medium text-gray-800">${r.pic}</td>
-                <td class="py-2 px-3">${r.desc}</td>
-                <td class="py-2 px-3 text-center"><span class="px-2 py-1 rounded-md text-xs font-bold ${isInc ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-700'}">${r.category}</span></td>
-                <td class="py-2 px-3 text-right font-bold text-blue-600">${isInc ? formatCurrency(r.amount) : '-'}</td>
-                <td class="py-2 px-3 text-right font-bold text-red-500">${!isInc ? formatCurrency(r.amount) : '-'}</td>
-                <td class="py-2 px-3 text-center space-x-2">
-                    <button onclick="openEditModal(${r.id})" class="text-blue-500 hover:text-blue-700 transition-colors" title="編輯"><i class="fas fa-edit"></i></button>
-                    <button onclick="deleteRecord(${r.id})" class="text-red-400 hover:text-red-600 transition-colors" title="刪除"><i class="fas fa-trash"></i></button>
-                </td>
-            </tr>
-        `;
-    });
+    if (records.length > 0) {
+        tbody.innerHTML = '';
+        filteredRecords.forEach(r => {
+            const isInc = r.type === 'income';
+            tbody.innerHTML += `
+                <tr class="hover:bg-blue-50 transition-colors">
+                    <td class="py-2 px-3">${r.date}</td>
+                    <td class="py-2 px-3 font-medium text-gray-800">${r.pic}</td>
+                    <td class="py-2 px-3">${r.desc}</td>
+                    <td class="py-2 px-3 text-center"><span class="px-2 py-1 rounded-md text-xs font-bold ${isInc ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-700'}">${r.category}</span></td>
+                    <td class="py-2 px-3 text-right font-bold text-blue-600">${isInc ? formatCurrency(r.amount) : '-'}</td>
+                    <td class="py-2 px-3 text-right font-bold text-red-500">${!isInc ? formatCurrency(r.amount) : '-'}</td>
+                    <td class="py-2 px-3 text-center space-x-2">
+                        <button onclick="openEditModal(${r.id})" class="text-blue-500 hover:text-blue-700 transition-colors" title="編輯"><i class="fas fa-edit"></i></button>
+                        <button onclick="deleteRecord(${r.id})" class="text-red-400 hover:text-red-600 transition-colors" title="刪除"><i class="fas fa-trash"></i></button>
+                    </td>
+                </tr>
+            `;
+        });
+    }
 
-    // ------------------------------------
-    // 圖表 1: 月度收支總額趨勢 (基礎圖)
-    // ------------------------------------
+    // 更新圖表
     const sortedMonths = Object.keys(monthlyData).sort();
     const inData = sortedMonths.map(m => monthlyData[m].income);
     const exData = sortedMonths.map(m => monthlyData[m].expense);
@@ -492,9 +508,6 @@ function renderApp() {
         options: { responsive: true, scales: { y: { beginAtZero: true } } }
     });
 
-    // ------------------------------------
-    // 圖表 2: 總行銷費用類別佔比 (圓餅圖)
-    // ------------------------------------
     const catLabels = Object.keys(categoryTotals);
     const catBgColors = catLabels.map(cat => colorMap[cat] || '#cbd5e1'); 
     
@@ -513,9 +526,6 @@ function renderApp() {
         options: { responsive: true, plugins: { legend: { position: 'bottom' } } }
     });
 
-    // ------------------------------------
-    // 圖表 3: 週期性支出類別分析 (堆疊長條圖)
-    // ------------------------------------
     const sortedPeriods = Object.keys(periodicExpenseData).sort(); 
     const expenseCategoriesArr = Array.from(expenseCategoriesSet); 
     
@@ -537,10 +547,7 @@ function renderApp() {
         },
         options: {
             responsive: true,
-            scales: {
-                x: { stacked: true },
-                y: { stacked: true, beginAtZero: true }
-            },
+            scales: { x: { stacked: true }, y: { stacked: true, beginAtZero: true } },
             plugins: {
                 tooltip: {
                     callbacks: {
